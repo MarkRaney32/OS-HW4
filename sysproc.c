@@ -6,6 +6,7 @@
 #include "memlayout.h"
 #include "mmu.h"
 #include "proc.h"
+#include "pstat.h"
 
 int
 sys_fork(void)
@@ -88,4 +89,40 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+// NEW SYS CALLS
+// Mark & Greg - OS
+
+int
+sys_settickets(void) {
+
+  // gets the parameter for # of tickets
+  int ticketVal;
+  argint(0, &ticketVal);
+
+  // How to access current process tickets
+  // Without a parameter reference?
+  //struct proc *curproc = myproc();
+
+  return 0;
+}
+
+int sys_getpinfo(void) {
+
+  // argptr assigns the pointer value of parameter
+  // to our pstat object pst
+  struct pstat *pst;
+  if(argptr(1, (void*)&pst, sizeof(*pst)) < 0)
+    return -1;
+
+  // Iterating over pstat table & printing
+  cprintf("PID  Times-Called\n---------------\n");
+  for(int i = 0; i < NPROC; i++) {
+    if(pst->inuse[i]) {
+      cprintf(" %d      %d", pst->pid[i], pst->ticks[i]);
+    }
+  }
+
+  return 0;
 }
