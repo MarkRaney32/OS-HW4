@@ -7,6 +7,12 @@
 #include "mmu.h"
 #include "proc.h"
 #include "pstat.h"
+#include "spinlock.h"
+
+struct {
+  struct spinlock lock;
+  struct proc proc[NPROC];
+} ptable;
 
 int
 sys_fork(void)
@@ -17,6 +23,11 @@ sys_fork(void)
 int
 sys_exit(void)
 {
+  //Added code - updating tickets on exit
+  acquire(&ptable.lock);
+  update_tickets(0);
+  release(&ptable.lock);
+
   exit();
   return 0;  // not reached
 }
@@ -30,6 +41,12 @@ sys_wait(void)
 int
 sys_kill(void)
 {
+
+  //Added code - updating tickets on kill
+  acquire(&ptable.lock);
+  update_tickets(0);
+  release(&ptable.lock);
+
   int pid;
 
   if(argint(0, &pid) < 0)
@@ -100,12 +117,15 @@ sys_settickets(void) {
   // gets the parameter for # of tickets
   int ticketVal;
   argint(0, &ticketVal);
+  if(ticketVal < 1){
+    return -1;
+  }
 
-  // How to access current process tickets
-  // Without a parameter reference?
-  //struct proc *curproc = myproc();
-
+  acquire(&ptable.lock);
+  update_tickets(ticketVal);
+  release(&ptable.lock);
   return 0;
+
 }
 
 int sys_getpinfo(void) {
@@ -116,13 +136,19 @@ int sys_getpinfo(void) {
   if(argptr(1, (void*)&pst, sizeof(*pst)) < 0)
     return -1;
 
-  // Iterating over pstat table & printing
-  cprintf("PID  Times-Called\n---------------\n");
-  for(int i = 0; i < NPROC; i++) {
-    if(pst->inuse[i]) {
-      cprintf(" %d      %d", pst->pid[i], pst->ticks[i]);
+  int index = 0;
+  struct proc *p;
+  acquire(&ptable.lock);
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+    pst->pid[index] = p->pid;
+    pst->inuse[index] = p->state != UNUSED;
+    pst->tickets[index] = p->tickets;
+    pst->ticks[index] = p->ticks;
+    if(pst->inuse[index] != UNUSED) {
+      cprintf("PID: %d      tickets: %d        ticks: %d\n", pst->pid[index], pst->tickets[index], pst->ticks[index]);
     }
   }
+  release(&ptable.lock);
 
   return 0;
 }

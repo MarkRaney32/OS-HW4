@@ -15,9 +15,8 @@ struct {
 
 static struct proc *initproc;
 
-// Added code
-// Mark & Greg - OS
-struct pstat pstats;
+//Added code
+int alloted_tickets = 1;
 
 int nextpid = 1;
 extern void forkret(void);
@@ -155,14 +154,10 @@ userinit(void)
 
   p->state = RUNNABLE;
 
-  release(&ptable.lock);
+  // added
+  p->tickets = 1;
 
-  // Added code
-  // Mark & Greg - OS
-  pstats.inuse[0] = 1;
-  pstats.tickets[0] = 1;
-  pstats.pid[0] = 0;
-  pstats.ticks[0] = 1;
+  release(&ptable.lock);
 
 }
 
@@ -229,14 +224,11 @@ fork(void)
 
   np->state = RUNNABLE;
 
-  release(&ptable.lock);
+  // added
+  np->tickets = curproc->tickets;
+  alloted_tickets += curproc->tickets;
 
-  // Added code
-  // Mark & Greg - OS
-  pstats.inuse[pid] = 1;
-  pstats.tickets[pid] = 1;
-  pstats.pid[pid] = pid;
-  pstats.ticks[pid] = 1;
+  release(&ptable.lock);
 
   return pid;
 }
@@ -352,9 +344,13 @@ scheduler(void)
 
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
+
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
       if(p->state != RUNNABLE)
         continue;
+
+      // added - updating ticks
+      p->ticks += 1;
 
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
@@ -551,4 +547,14 @@ procdump(void)
     }
     cprintf("\n");
   }
+}
+
+// New code added
+// Mark & Greg
+void update_tickets(int tickets) {
+  struct proc *curproc = myproc();
+  // Updating the total number of tickets allotted
+  // by the change in the current processes tickets
+  alloted_tickets += tickets - curproc->tickets;
+  curproc->tickets = tickets;
 }
